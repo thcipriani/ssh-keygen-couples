@@ -1,0 +1,185 @@
+#!/usr/bin/env python3
+"""
+ssh-keygen-couples
+==================
+
+This script takes an ssh public key file, extracts key data, and prints
+fingerprints. Key fingerprints are displayed as:
+
+- SHA256
+- MD5
+- ASCII representation of the SHA256 hash
+- Four couples names and cities inspired by the 2006 talk by Dan Kaminsky[0]
+
+[0]. <https://www.youtube.com/watch?v=QT2hOyK2qv4&t=599s>
+"""
+import argparse
+import base64
+import hashlib
+import time
+
+
+FILES = {
+    'first_name': 'txt/17-bit-first-name.txt',
+    'last_name': 'txt/19-bit-last-name.txt',
+    'city': 'txt/11-bit-city-name.txt'
+}
+
+
+def bin_to_dec(binary_string):
+    return int(binary_string, 2)
+
+
+def hex_to_chunks(hex_string):
+    # Convert hexadecimal string to binary
+    binary_string = bin(int(hex_string, 16))[2:]
+
+    # Pad the binary string with zeros to ensure it's a multiple of 16
+    binary_string = binary_string.zfill((len(binary_string) + 15) // 16 * 16)
+
+    # Split the binary string into chunks of 64 bits
+    chunks = [binary_string[i:i+64] for i in range(0, len(binary_string), 64)]
+
+    # Convert 256 bit key to 4 couples of 64 bits
+    # Need: 64 bits for four couples
+    #
+    # 131072 first names: 17 bits per name
+    # 524288 last names: 19 bits per name
+    # 2048 cities: 11 bits per city
+    # 17+17+19+11 = 64 bits
+    # Split into couples of 17, 17, 19, and 11 bits
+    # 64 bits * 4 couples = 256 bits
+
+    couples = []
+    for chunk in chunks:
+        couple = {
+            'first_name': bin_to_dec(chunk[:17]),
+            'second_name': bin_to_dec(chunk[17:34]),
+            'last_name': bin_to_dec(chunk[34:53]),
+            'city': bin_to_dec(chunk[53:])
+        }
+        couples.append(couple)
+    return couples
+
+
+def chunks_to_couples(chunks):
+    couples = []
+    for chunk in chunks:
+        first_name = get_first_name(chunk['first_name'])
+        second_first_name = get_first_name(chunk['second_name'])
+        last_name = get_last_name(chunk['last_name'])
+        city = get_city(chunk['city'])
+
+        couples.append(f'{first_name} and {second_first_name} {last_name} from {city}')
+    return couples
+
+
+def get_line_from_file(file_name, line_number):
+    with open(file_name) as f:
+        for i, line in enumerate(f):
+            if i == line_number:
+                return line.strip()
+
+
+def get_first_name(line_number):
+    return get_line_from_file(FILES['first_name'], line_number)
+
+
+def get_last_name(line_number):
+    return get_line_from_file(FILES['last_name'], line_number)
+
+
+def get_city(line_number):
+    return get_line_from_file(FILES['city'], line_number)
+
+
+def draw_ascii(hex_string):
+    """
+    Visualhost key fingerprint as ASCII art.
+
+    This is stolen from <https://github.com/thcipriani/slime-bishop/blob/master/slime-coins.py>,
+    which I wrote so long ago, it may as well be by a different person.
+    """
+    bishop_char = '♝'
+    start_char = 'S'
+    end_char = 'E'
+    chars = ' .o+=*BOX@%&#/^'
+
+    fldbase = 8
+    fldsize_x = (fldbase * 2 + 1)
+    fldsize_y = (fldbase + 1)
+
+    start = (int(fldsize_x / 2), int(fldsize_y / 2))
+    bishop_pos = start
+
+    fields = [[0 * j for j in range(9)] for i in range(17)]
+    pairs = list(zip(hex_string[::2], hex_string[1::2]))
+    pairs = [bin(int(''.join(pair), 16))[2:].zfill(8) for pair in pairs]
+    moves = []
+    for pair in pairs:
+        moves += list(zip(pair[::2], pair[1::2]))[::-1]
+    moves = [int(''.join(move),2) for move in moves]
+
+    border = ['-' for i in range(0, fldsize_x)]
+    for i, pair in enumerate(moves):
+        rows = []
+        for y in range(0, fldsize_y):
+            row = '|'
+            for x in range(0, fldsize_x):
+                char = None
+                if x == bishop_pos[0] and y == bishop_pos[1]:
+                    if i == len(moves) - 1:
+                        char = end_char
+                    fields[x][y] += 1
+                if char is None:
+                    char = chars[fields[x][y] % len(chars)]
+                if x == start[0] and y == start[1]:
+                    char = start_char
+                row += char
+            row += '|'
+            rows.append(row)
+
+        if pair & 0x1 > 0:
+            x = bishop_pos[0] + 1
+        else:
+            x = bishop_pos[0] - 1
+
+        if pair & 0x2 > 0:
+            y = bishop_pos[1] + 1
+        else:
+            y = bishop_pos[1] - 1
+
+        x = max(x, 0)
+        y = max(y, 0)
+        x = min(x, fldsize_x - 1)
+        y = min(y, fldsize_y - 1)
+
+        bishop_pos = (x, y)
+
+    print('+' + ''.join(border) + '+')
+    for row in rows:
+        print(row)
+    print('+' + ''.join(border) + '+')
+
+
+def main(args):
+    with open(args.file_path, 'r') as f:
+        key = f.read().split(' ')[1].strip()
+    decoded_key = base64.b64decode(key)
+
+    sha_sum = hashlib.sha256(decoded_key)
+    encoded_sha_sum = base64.b64encode(sha_sum.digest())
+    print('SHA256:{}'.format(encoded_sha_sum.rstrip(b'=').decode('utf8')))
+    print('MD5:{}'.format(':'.join([hashlib.md5(decoded_key).hexdigest()[i:i+2] for i in range(0, 32, 2)])))
+    draw_ascii(sha_sum.hexdigest())
+
+    couples = chunks_to_couples(hex_to_chunks(sha_sum.hexdigest()))
+    print('Key Data:')
+    for i, couple in enumerate(couples):
+        print(f'    {couple}')
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-f', '--file-path', help='The SSH public key file', required=True)
+    args = parser.parse_args()
+    main(args)
