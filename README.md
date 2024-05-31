@@ -32,11 +32,22 @@ Usage
         Maarja and Nisim Balyeat from Mukilteo, Washington, United States
         Hsu-Heng and Rasim Haozi from Manali, Tamil Nadu, India
 
+Math
+----
+
+SHA256 key fingerprints are 256 bits. To represent this as couples, the math works like this:
+
+- 131,072 first names: 17 bits per name (×2)
+- 524,288 last names: 19 bits per name
+- 2,048 cities: 11 bits per city
+- 17+17+19+11 = 64 bits
+- 4×couples = 256 bits
+
 Credits
 -------
 
-The names are the ascii first/last names in the dataset [A cross-verified database of notable people, 3500BC-2018AD][1].
-The cities are from https://github.com/datasets/world-cities.
+- The names are the ascii first/last names in the dataset [A cross-verified database of notable people, 3500BC-2018AD][1].
+- The cities are from https://github.com/datasets/world-cities.
 
 [0]: <https://www.youtube.com/watch?v=QT2hOyK2qv4&t=599s>
 [1]: <https://www.nature.com/articles/s41597-022-01369-4>
